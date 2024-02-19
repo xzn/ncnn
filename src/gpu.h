@@ -287,6 +287,9 @@ public:
     int support_VK_KHR_dedicated_allocation() const;
     int support_VK_KHR_descriptor_update_template() const;
     int support_VK_KHR_external_memory() const;
+    int support_VK_KHR_external_semaphore() const;
+    int support_VK_KHR_external_memory_win32() const;
+    int support_VK_KHR_external_semaphore_win32() const;
     int support_VK_KHR_get_memory_requirements2() const;
     int support_VK_KHR_maintenance1() const;
     int support_VK_KHR_maintenance2() const;
