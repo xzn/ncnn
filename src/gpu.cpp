@@ -352,6 +352,8 @@ public:
     int support_VK_KHR_external_semaphore;
     int support_VK_KHR_external_memory_win32;
     int support_VK_KHR_external_semaphore_win32;
+    int support_VK_KHR_external_memory_fd;
+    int support_VK_KHR_external_semaphore_fd;
     int support_VK_KHR_get_memory_requirements2;
     int support_VK_KHR_maintenance1;
     int support_VK_KHR_maintenance2;
@@ -729,6 +731,16 @@ int GpuInfo::support_VK_KHR_external_memory_win32() const
 int GpuInfo::support_VK_KHR_external_semaphore_win32() const
 {
     return d->support_VK_KHR_external_semaphore_win32;
+}
+
+int GpuInfo::support_VK_KHR_external_memory_fd() const
+{
+    return d->support_VK_KHR_external_memory_fd;
+}
+
+int GpuInfo::support_VK_KHR_external_semaphore_fd() const
+{
+    return d->support_VK_KHR_external_semaphore_fd;
 }
 
 int GpuInfo::support_VK_KHR_get_memory_requirements2() const
@@ -1703,6 +1715,8 @@ int create_gpu_instance(const char* driver_path)
         gpu_info.support_VK_KHR_external_semaphore = 0;
         gpu_info.support_VK_KHR_external_memory_win32 = 0;
         gpu_info.support_VK_KHR_external_semaphore_win32 = 0;
+        gpu_info.support_VK_KHR_external_memory_fd = 0;
+        gpu_info.support_VK_KHR_external_semaphore_fd = 0;
         gpu_info.support_VK_KHR_get_memory_requirements2 = 0;
         gpu_info.support_VK_KHR_maintenance1 = 0;
         gpu_info.support_VK_KHR_maintenance2 = 0;
@@ -1754,6 +1768,10 @@ int create_gpu_instance(const char* driver_path)
                 gpu_info.support_VK_KHR_external_memory_win32 = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_external_semaphore_win32") == 0)
                 gpu_info.support_VK_KHR_external_semaphore_win32 = exp.specVersion;
+            else if (strcmp(exp.extensionName, "VK_KHR_external_memory_fd") == 0)
+                gpu_info.support_VK_KHR_external_memory_fd = exp.specVersion;
+            else if (strcmp(exp.extensionName, "VK_KHR_external_semaphore_fd") == 0)
+                gpu_info.support_VK_KHR_external_semaphore_fd = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_get_memory_requirements2") == 0)
                 gpu_info.support_VK_KHR_get_memory_requirements2 = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_maintenance1") == 0)
@@ -2481,6 +2499,10 @@ VulkanDevice::VulkanDevice(int device_index)
         enabledExtensions.push_back("VK_KHR_external_memory_win32");
     if (info.support_VK_KHR_external_semaphore_win32())
         enabledExtensions.push_back("VK_KHR_external_semaphore_win32");
+    if (info.support_VK_KHR_external_memory_fd())
+        enabledExtensions.push_back("VK_KHR_external_memory_fd");
+    if (info.support_VK_KHR_external_semaphore_fd())
+        enabledExtensions.push_back("VK_KHR_external_semaphore_fd");
     if (info.support_VK_KHR_get_memory_requirements2())
         enabledExtensions.push_back("VK_KHR_get_memory_requirements2");
     if (info.support_VK_KHR_maintenance1())
