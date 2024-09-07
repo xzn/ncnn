@@ -85,7 +85,7 @@ public:
 #endif // __ANDROID_API__ >= 26
 #endif // NCNN_PLATFORM_API
 
-    int submit_and_wait();
+    int submit_and_wait(VkSemaphore signalSemaphore = nullptr);
 
     int reset();
 
