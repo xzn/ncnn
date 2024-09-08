@@ -2288,7 +2288,7 @@ void VkCompute::record_import_android_hardware_buffer(const ImportAndroidHardwar
 #endif // __ANDROID_API__ >= 26
 #endif // NCNN_PLATFORM_API
 
-int VkCompute::submit_and_wait(VkSemaphore waitSemaphore, VkSemaphore signalSemaphore, VkFence *computeCommandFence)
+int VkCompute::submit_and_wait(VkSemaphore waitSemaphore, VkPipelineStageFlags waitFlags, VkSemaphore signalSemaphore, VkFence *computeCommandFence)
 {
     //     NCNN_LOGE("submit_and_wait");
 
@@ -2410,11 +2410,12 @@ int VkCompute::submit_and_wait(VkSemaphore waitSemaphore, VkSemaphore signalSema
         if (waitSemaphore) {
             submitInfo.waitSemaphoreCount = 1;
             submitInfo.pWaitSemaphores = &waitSemaphore;
+            submitInfo.pWaitDstStageMask = &waitFlags;
         } else {
             submitInfo.waitSemaphoreCount = 0;
             submitInfo.pWaitSemaphores = 0;
+            submitInfo.pWaitDstStageMask = 0;
         }
-        submitInfo.pWaitDstStageMask = 0;
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &d->compute_command_buffer;
         if (signalSemaphore) {
