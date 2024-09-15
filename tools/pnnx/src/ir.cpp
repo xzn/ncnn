@@ -23,11 +23,6 @@
 #include <string>
 #include <stack>
 
-#if BUILD_PNNX
-#include <torch/script.h>
-#include <torch/csrc/api/include/torch/version.h>
-#endif
-
 #include "storezip.h"
 #include "utils.h"
 
@@ -47,6 +42,7 @@ static bool type_is_integer(int type)
     if (type == 10) return false;
     if (type == 11) return false;
     if (type == 12) return false;
+    if (type == 13) return false;
     return false;
 }
 
@@ -64,6 +60,7 @@ static const char* type_to_string(int type)
     if (type == 10) return "c64";
     if (type == 11) return "c128";
     if (type == 12) return "c32";
+    if (type == 13) return "bf16";
     return "null";
 }
 
@@ -81,6 +78,7 @@ static const char* type_to_numpy_string(int type)
     if (type == 10) return "csingle";
     if (type == 11) return "cdouble";
     if (type == 12) return "chalf";
+    if (type == 13) return "bfloat16";
     return "null";
 }
 
@@ -98,6 +96,7 @@ static const char* type_to_dtype_string(int type)
     if (type == 10) return "torch.complex64";
     if (type == 11) return "torch.complex128";
     if (type == 12) return "torch.complex32";
+    if (type == 13) return "torch.bfloat16";
     return "null";
 }
 
@@ -115,6 +114,7 @@ static size_t type_to_elemsize(int type)
     if (type == 10) return 8;
     if (type == 11) return 16;
     if (type == 12) return 4;
+    if (type == 13) return 2;
     return 0; // null
 }
 
@@ -132,278 +132,9 @@ static int string_to_type(const char* s)
     if (strcmp(s, "c64") == 0) return 10;
     if (strcmp(s, "c128") == 0) return 11;
     if (strcmp(s, "c32") == 0) return 12;
+    if (strcmp(s, "bf16") == 0) return 13;
     return 0; // null
 }
-
-#if BUILD_PNNX
-int get_at_tensor_type(const at::ScalarType& st)
-{
-    if (st == c10::ScalarType::Float) return 1;
-    if (st == c10::ScalarType::Double) return 2;
-    if (st == c10::ScalarType::Half) return 3;
-    if (st == c10::ScalarType::Int) return 4;
-    if (st == c10::ScalarType::QInt32) return 4;
-    if (st == c10::ScalarType::Long) return 5;
-    if (st == c10::ScalarType::Short) return 6;
-    if (st == c10::ScalarType::Char) return 7;
-    if (st == c10::ScalarType::QInt8) return 7;
-    if (st == c10::ScalarType::Byte) return 8;
-    if (st == c10::ScalarType::QUInt8) return 8;
-    if (st == c10::ScalarType::Bool) return 9;
-    if (st == c10::ScalarType::ComplexFloat) return 10;
-    if (st == c10::ScalarType::ComplexDouble) return 11;
-    if (st == c10::ScalarType::ComplexHalf) return 12;
-    return 0; // unknown type
-}
-
-Parameter::Parameter(const torch::jit::Node* value_node)
-{
-    type = 0;
-
-    if (value_node->kind() == c10::prim::Constant)
-    {
-        if (value_node->output()->type()->kind() == c10::TypeKind::NoneType)
-        {
-            type = 0;
-            return;
-        }
-
-        if (!value_node->hasAttribute(torch::jit::attr::value))
-        {
-            fprintf(stderr, "no attribute value\n");
-            value_node->dump();
-            return;
-        }
-
-        switch (value_node->output()->type()->kind())
-        {
-        case c10::TypeKind::NoneType:
-        {
-            type = 0;
-            break;
-        }
-        case c10::TypeKind::BoolType:
-        {
-            type = 1;
-            b = value_node->i(torch::jit::attr::value);
-            break;
-        }
-        case c10::TypeKind::IntType:
-        {
-            type = 2;
-            int64_t i64 = value_node->i(torch::jit::attr::value);
-            if (i64 == std::numeric_limits<int64_t>::max()) i64 = INT_MAX;
-            if (i64 == std::numeric_limits<int64_t>::min()) i64 = INT_MIN;
-            i = (int)i64;
-            break;
-        }
-        case c10::TypeKind::FloatType:
-        {
-            type = 3;
-            f = (float)value_node->f(torch::jit::attr::value);
-            break;
-        }
-        case c10::TypeKind::StringType:
-        {
-            type = 4;
-            s = value_node->s(torch::jit::attr::value);
-            break;
-        }
-        case c10::TypeKind::DeviceObjType:
-        {
-            type = 4;
-            s = value_node->s(torch::jit::attr::value);
-            break;
-        }
-#if TORCH_VERSION_MAJOR >= 2 || (TORCH_VERSION_MAJOR >= 1 && TORCH_VERSION_MINOR >= 9)
-        case c10::TypeKind::ComplexType:
-        {
-            type = 10;
-            c = std::complex<float>(value_node->c(torch::jit::attr::value));
-            break;
-        }
-#endif
-        case c10::TypeKind::TensorType:
-        {
-            at::Tensor t = value_node->t(torch::jit::attr::value);
-
-            if (t.dim() == 0 && t.numel() == 1)
-            {
-                if (t.scalar_type() == c10::ScalarType::Long)
-                {
-                    type = 2;
-                    int64_t i64 = t.item<int64_t>();
-                    if (i64 == std::numeric_limits<int64_t>::max()) i64 = INT_MAX;
-                    if (i64 == std::numeric_limits<int64_t>::min()) i64 = INT_MIN;
-                    i = (int)i64;
-                }
-                else if (t.scalar_type() == c10::ScalarType::Int)
-                {
-                    type = 2;
-                    i = t.item<int>();
-                }
-                else if (t.scalar_type() == c10::ScalarType::Double)
-                {
-                    type = 3;
-                    f = (float)t.item<double>();
-                }
-                else if (t.scalar_type() == c10::ScalarType::Float)
-                {
-                    type = 3;
-                    f = t.item<float>();
-                }
-                else if (t.scalar_type() == c10::ScalarType::ComplexDouble)
-                {
-                    type = 10;
-                    c = std::complex<float>(t.item<c10::complex<double> >());
-                }
-                else if (t.scalar_type() == c10::ScalarType::ComplexFloat)
-                {
-                    type = 10;
-                    c = std::complex<float>(t.item<c10::complex<float> >());
-                }
-                else
-                {
-                    fprintf(stderr, "unknown Parameter value kind %s of TensorType, t.dim = 0\n", value_node->kind().toDisplayString());
-                }
-            }
-            else
-            {
-                // constant tensor will become pnnx attribute node later
-                type = 8;
-            }
-
-            break;
-        }
-        case c10::TypeKind::ListType:
-        {
-            switch (value_node->output()->type()->containedTypes()[0]->kind())
-            {
-            case c10::TypeKind::IntType:
-            {
-                type = 5;
-                std::vector<int64_t> i64s = value_node->ival(torch::jit::attr::value).toIntVector();
-                for (auto i64 : i64s)
-                {
-                    if (i64 == std::numeric_limits<int64_t>::max()) i64 = INT_MAX;
-                    if (i64 == std::numeric_limits<int64_t>::min()) i64 = INT_MIN;
-                    ai.push_back(i64);
-                }
-                break;
-            }
-            case c10::TypeKind::FloatType:
-            {
-                type = 6;
-                std::vector<double> fs = value_node->ival(torch::jit::attr::value).toDoubleVector();
-                for (auto f : fs)
-                {
-                    af.push_back((float)f);
-                }
-                break;
-            }
-            default:
-            {
-                fprintf(stderr, "unknown Parameter value list element kind %s\n", c10::typeKindToString(value_node->output()->type()->containedTypes()[0]->kind()));
-                break;
-            }
-            }
-            break;
-        }
-        default:
-        {
-            fprintf(stderr, "unknown Parameter value kind %s\n", c10::typeKindToString(value_node->output()->type()->kind()));
-            break;
-        }
-        }
-    }
-    else if (value_node->kind() == c10::prim::ListConstruct)
-    {
-        switch (value_node->output()->type()->cast<c10::ListType>()->getElementType()->kind())
-        {
-        case c10::TypeKind::IntType:
-        {
-            type = 5;
-            for (const auto& x : value_node->inputs())
-            {
-                if (!x->node()->hasAttribute(torch::jit::attr::value))
-                {
-                    fprintf(stderr, "no attribute value in int list\n");
-                    ai.push_back(0);
-                    continue;
-                }
-
-                ai.push_back((int)x->node()->i(torch::jit::attr::value));
-            }
-            break;
-        }
-        case c10::TypeKind::FloatType:
-        {
-            type = 6;
-            for (const auto& x : value_node->inputs())
-            {
-                if (!x->node()->hasAttribute(torch::jit::attr::value))
-                {
-                    fprintf(stderr, "no attribute value in float list\n");
-                    af.push_back(0.f);
-                    continue;
-                }
-
-                af.push_back((float)x->node()->f(torch::jit::attr::value));
-            }
-            break;
-        }
-        case c10::TypeKind::StringType:
-        {
-            type = 7;
-            for (const auto& x : value_node->inputs())
-            {
-                if (!x->node()->hasAttribute(torch::jit::attr::value))
-                {
-                    fprintf(stderr, "no attribute value in string list\n");
-                    as.push_back("");
-                    continue;
-                }
-
-                as.push_back(x->node()->s(torch::jit::attr::value));
-            }
-            break;
-        }
-#if TORCH_VERSION_MAJOR >= 2 || (TORCH_VERSION_MAJOR >= 1 && TORCH_VERSION_MINOR >= 9)
-        case c10::TypeKind::ComplexType:
-        {
-            type = 11;
-            for (const auto& x : value_node->inputs())
-            {
-                if (!x->node()->hasAttribute(torch::jit::attr::value))
-                {
-                    fprintf(stderr, "no attribute value in complex list\n");
-                    ac.push_back(std::complex<float>(0.f, 0.f));
-                    continue;
-                }
-
-                ac.push_back(std::complex<float>(x->node()->c(torch::jit::attr::value)));
-            }
-            break;
-        }
-#endif
-        default:
-        {
-            fprintf(stderr, "unknown Parameter value list element kind %s\n", c10::typeKindToString(value_node->output()->type()->cast<c10::ListType>()->getElementType()->kind()));
-            break;
-        }
-        }
-    }
-    else
-    {
-        fprintf(stderr, "unknown Parameter value_node kind %s\n", value_node->kind().toDisplayString());
-    }
-}
-
-Parameter::Parameter(const torch::jit::Value* value)
-    : Parameter(value->node())
-{
-}
-#endif // BUILD_PNNX
 
 bool operator==(const Parameter& lhs, const Parameter& rhs)
 {
@@ -442,59 +173,6 @@ bool operator==(const Parameter& lhs, const Parameter& rhs)
 
     return false;
 }
-
-#if BUILD_PNNX
-Attribute::Attribute(const at::Tensor& t)
-{
-    type = get_at_tensor_type(t.scalar_type());
-
-    const int ndim = (int)t.dim();
-
-    if (ndim == 0)
-    {
-        shape = {1};
-
-        data.resize(type_to_elemsize(type));
-
-        if (t.scalar_type() == c10::ScalarType::Long)
-        {
-            int64_t i = t.item<int64_t>();
-            memcpy((void*)data.data(), (const void*)&i, data.size());
-        }
-        else if (t.scalar_type() == c10::ScalarType::Int)
-        {
-            int i = t.item<int>();
-            memcpy((void*)data.data(), (const void*)&i, data.size());
-        }
-        else if (t.scalar_type() == c10::ScalarType::Double)
-        {
-            double f = t.item<double>();
-            memcpy((void*)data.data(), (const void*)&f, data.size());
-        }
-        else if (t.scalar_type() == c10::ScalarType::Float)
-        {
-            float f = t.item<float>();
-            memcpy((void*)data.data(), (const void*)&f, data.size());
-        }
-        else
-        {
-            fprintf(stderr, "unknown Attribute tensor scalar type %d\n", type);
-        }
-
-        return;
-    }
-
-    shape.resize(ndim);
-    for (int i = 0; i < ndim; i++)
-        shape[i] = t.size(i);
-
-    if (shape.size() > 0)
-    {
-        data.resize(elemcount() * type_to_elemsize(type));
-        memcpy((void*)data.data(), (const void*)t.cpu().contiguous().data_ptr(), data.size());
-    }
-}
-#endif // BUILD_PNNX
 
 Attribute::Attribute(const std::initializer_list<int>& _shape, const std::vector<float>& t)
 {
@@ -953,7 +631,7 @@ static void load_shape(Operator* op, const std::string& key, const std::string& 
             operand->shape.push_back(-233);
             int index = operand->shape.size() - 1;
             std::string key = elem.substr(1);
-            operand->params[std::string("__shape_") + std::to_string(index)] = key;
+            operand->params[std::string("__shape__") + std::to_string(index)] = key;
         }
         else
         {
@@ -1271,7 +949,7 @@ static std::string sanitize_identifier(const std::string& s)
     std::string ss = s;
     for (size_t i = 0; i < ss.size(); i++)
     {
-        if (ss[i] == '.' || ss[i] == ':')
+        if (ss[i] == '.' || ss[i] == ':' || ss[i] == '/')
             ss[i] = '_';
     }
 
@@ -1326,11 +1004,20 @@ static std::string expand_expression(const Operator* op)
         {
             std::string a = exprstack.top();
             exprstack.pop();
-            std::string b = exprstack.top();
-            exprstack.pop();
 
-            std::string r = a + ".size(" + b + ")";
-            exprstack.push(r);
+            if (exprstack.empty())
+            {
+                std::string r = a + ".shape";
+                exprstack.push(r);
+            }
+            else
+            {
+                std::string b = exprstack.top();
+                exprstack.pop();
+
+                std::string r = a + ".size(" + b + ")";
+                exprstack.push(r);
+            }
         }
         else if (t == "int"
                  || t == "abs"
@@ -1358,9 +1045,12 @@ static std::string expand_expression(const Operator* op)
                  || t == "square"
                  || t == "tan"
                  || t == "tanh"
-                 || t == "trunc")
+                 || t == "trunc"
+                 || t == "torch.bool"
+                 || t == "torch.float"
+                 || t == "torch.long")
         {
-            std::string unaryop;
+            std::string unaryop = t;
             if (t == "int") unaryop = "int";
             if (t == "abs") unaryop = "torch.abs";
             if (t == "acos") unaryop = "torch.acos";
@@ -1401,7 +1091,8 @@ static std::string expand_expression(const Operator* op)
                  || t == "maximum"
                  || t == "min"
                  || t == "minimum"
-                 || t == "pow")
+                 || t == "pow"
+                 || t == "logaddexp")
         {
             std::string binaryop;
             if (t == "atan2") binaryop = "torch.atan2";
@@ -1411,6 +1102,7 @@ static std::string expand_expression(const Operator* op)
             if (t == "min") binaryop = "torch.min";
             if (t == "minimum") binaryop = "torch.minimum";
             if (t == "pow") binaryop = "torch.pow";
+            if (t == "logaddexp") binaryop = "torch.logaddexp";
 
             std::string a = exprstack.top();
             exprstack.pop();
@@ -2404,14 +2096,28 @@ int Graph::python(const std::string& pypath, const std::string& pnnxbinpath)
                 }
                 fprintf(pyfp, ")\n");
             }
-            else if (op->type.find("::") != std::string::npos || op->type.find(".") != std::string::npos)
+            else
             {
+                if (op->type.find("::") == std::string::npos && op->type.find(".") == std::string::npos)
+                {
+                    fprintf(stderr, "todo %s\n", op->type.c_str());
+                }
+
                 // direct
                 for (size_t i = 0; i < op->outputs.size(); i++)
                 {
                     fprintf(pyfp, "v_%s", sanitize_identifier(op->outputs[i]->name).c_str());
                     if (i + 1 != op->outputs.size())
                         fprintf(pyfp, ", ");
+                }
+
+                if (op->type == "torch.max" || op->type == "torch.max")
+                {
+                    if (op->has_param("dim") && op->outputs.size() == 1)
+                    {
+                        // torch.max and torch.min with dim returns tuple
+                        fprintf(pyfp, ", _");
+                    }
                 }
 
                 if (op->type.substr(0, 7) == "Tensor.")
@@ -2645,10 +2351,6 @@ int Graph::python(const std::string& pypath, const std::string& pnnxbinpath)
                 }
 
                 fprintf(pyfp, ")\n");
-            }
-            else
-            {
-                fprintf(stderr, "todo %s\n", op->type.c_str());
             }
         }
     }
@@ -3065,7 +2767,7 @@ int Graph::parse(const std::string& param)
                             attr.shape.push_back(-233);
                             int index = attr.shape.size() - 1;
                             std::string key = elem.substr(1);
-                            attr.params[std::string("__shape_") + std::to_string(index)] = key;
+                            attr.params[std::string("__shape__") + std::to_string(index)] = key;
                         }
                         else
                         {
@@ -3099,7 +2801,8 @@ int Graph::parse(const std::string& param)
 void Operand::remove_consumer(const Operator* c)
 {
     auto it = std::find(consumers.begin(), consumers.end(), c);
-    consumers.erase(it);
+    if (it != consumers.end())
+        consumers.erase(it);
 }
 
 Operator* Graph::new_operator(const std::string& type, const std::string& name)
@@ -3128,37 +2831,6 @@ Operator* Graph::new_operator_after(const std::string& type, const std::string& 
     ops.insert(std::find(ops.begin(), ops.end(), cur) + 1, op);
     return op;
 }
-
-#if BUILD_PNNX
-Operand* Graph::new_operand(const torch::jit::Value* v)
-{
-    Operand* r = new Operand;
-    r->name = v->debugName();
-
-    r->type = -1;
-
-    auto pt = v->type()->cast<c10::TensorType>();
-    if (pt)
-    {
-        if (pt->scalarType().has_value() && pt->dim().has_value())
-        {
-            r->type = get_at_tensor_type(pt->scalarType().value());
-            const int ndim = (int)pt->dim().value();
-            r->shape.resize(ndim);
-            for (int i = 0; i < ndim; i++)
-            {
-                if (pt->sizes()[i].has_value())
-                    r->shape[i] = (int)pt->sizes()[i].value();
-                else
-                    r->shape[i] = -1;
-            }
-        }
-    }
-
-    operands.push_back(r);
-    return r;
-}
-#endif // BUILD_PNNX
 
 Operand* Graph::new_operand(const std::string& name)
 {

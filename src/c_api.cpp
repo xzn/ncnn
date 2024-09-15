@@ -1240,6 +1240,13 @@ void ncnn_net_set_option(ncnn_net_t net, ncnn_option_t opt)
     ((Net*)net->pthis)->opt = *((Option*)opt);
 }
 
+#if NCNN_VULKAN
+void ncnn_net_set_vulkan_device(ncnn_net_t net, int device_index)
+{
+    ((Net*)net->pthis)->set_vulkan_device(device_index);
+}
+#endif
+
 static ::ncnn::Layer* __Layer_c_api_layer_creator(void* userdata)
 {
     ncnn_net_custom_layer_factory_t ud = (ncnn_net_custom_layer_factory_t)userdata;
@@ -1458,6 +1465,7 @@ void ncnn_copy_cut_border_3d(const ncnn_mat_t src, ncnn_mat_t dst, int top, int 
     copy_cut_border_3d(*(const Mat*)src, *(Mat*)dst, top, bottom, left, right, front, behind, _opt);
 }
 
+#if NCNN_PIXEL_DRAWING
 void ncnn_draw_rectangle_c1(unsigned char* pixels, int w, int h, int rx, int ry, int rw, int rh, unsigned int color, int thickness)
 {
     ncnn::draw_rectangle_c1(pixels, w, h, w, rx, ry, rw, rh, color, thickness);
@@ -1537,6 +1545,7 @@ void ncnn_draw_line_c4(unsigned char* pixels, int w, int h, int x0, int y0, int 
 {
     ncnn::draw_line_c4(pixels, w, h, w * 4, x0, y0, x1, y1, color, thickness);
 }
+#endif /* NCNN_PIXEL_DRAWING */
 
 #ifdef __cplusplus
 } /* extern "C" */
