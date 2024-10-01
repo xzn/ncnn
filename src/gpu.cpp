@@ -353,6 +353,7 @@ public:
     int support_VK_KHR_external_memory;
     int support_VK_KHR_external_semaphore;
     int support_VK_KHR_external_memory_win32;
+    int support_VK_KHR_win32_keyed_mutex;
     int support_VK_KHR_external_semaphore_win32;
     int support_VK_KHR_external_memory_fd;
     int support_VK_KHR_external_semaphore_fd;
@@ -728,6 +729,11 @@ int GpuInfo::support_VK_KHR_external_semaphore() const
 int GpuInfo::support_VK_KHR_external_memory_win32() const
 {
     return d->support_VK_KHR_external_memory_win32;
+}
+
+int GpuInfo::support_VK_KHR_win32_keyed_mutex() const
+{
+    return d->support_VK_KHR_win32_keyed_mutex;
 }
 
 int GpuInfo::support_VK_KHR_external_semaphore_win32() const
@@ -1714,6 +1720,7 @@ int create_gpu_instance(const char* driver_path)
         gpu_info.support_VK_KHR_external_memory = 0;
         gpu_info.support_VK_KHR_external_semaphore = 0;
         gpu_info.support_VK_KHR_external_memory_win32 = 0;
+        gpu_info.support_VK_KHR_win32_keyed_mutex = 0;
         gpu_info.support_VK_KHR_external_semaphore_win32 = 0;
         gpu_info.support_VK_KHR_external_memory_fd = 0;
         gpu_info.support_VK_KHR_external_semaphore_fd = 0;
@@ -1766,6 +1773,8 @@ int create_gpu_instance(const char* driver_path)
                 gpu_info.support_VK_KHR_external_semaphore = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_external_memory_win32") == 0)
                 gpu_info.support_VK_KHR_external_memory_win32 = exp.specVersion;
+            else if (strcmp(exp.extensionName, "VK_KHR_win32_keyed_mutex") == 0)
+                gpu_info.support_VK_KHR_win32_keyed_mutex = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_external_semaphore_win32") == 0)
                 gpu_info.support_VK_KHR_external_semaphore_win32 = exp.specVersion;
             else if (strcmp(exp.extensionName, "VK_KHR_external_memory_fd") == 0)
@@ -2518,6 +2527,8 @@ VulkanDevice::VulkanDevice(int device_index)
         enabledExtensions.push_back("VK_KHR_external_semaphore");
     if (info.support_VK_KHR_external_memory_win32())
         enabledExtensions.push_back("VK_KHR_external_memory_win32");
+    if (info.support_VK_KHR_win32_keyed_mutex())
+        enabledExtensions.push_back("VK_KHR_win32_keyed_mutex");
     if (info.support_VK_KHR_external_semaphore_win32())
         enabledExtensions.push_back("VK_KHR_external_semaphore_win32");
     if (info.support_VK_KHR_external_memory_fd())

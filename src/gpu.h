@@ -290,6 +290,7 @@ public:
     int support_VK_KHR_external_memory() const;
     int support_VK_KHR_external_semaphore() const;
     int support_VK_KHR_external_memory_win32() const;
+    int support_VK_KHR_win32_keyed_mutex() const;
     int support_VK_KHR_external_semaphore_win32() const;
     int support_VK_KHR_external_memory_fd() const;
     int support_VK_KHR_external_semaphore_fd() const;
